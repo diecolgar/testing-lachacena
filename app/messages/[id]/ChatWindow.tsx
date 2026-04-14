@@ -29,7 +29,7 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
         async (payload) => {
           const { data: sender } = await supabase
             .from('profiles')
-            .select('id, username')
+            .select('*')
             .eq('id', (payload.new as Message).sender_id)
             .single()
 
