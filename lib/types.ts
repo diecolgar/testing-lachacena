@@ -115,17 +115,3 @@ export interface Review {
   reviewee?: Profile
 }
 
-export type Database = {
-  public: {
-    Tables: {
-      profiles: { Row: Profile; Insert: Omit<Profile, 'created_at' | 'updated_at'>; Update: Partial<Profile> }
-      categories: { Row: Category; Insert: Omit<Category, 'id'>; Update: Partial<Category> }
-      listings: { Row: Listing; Insert: Omit<Listing, 'id' | 'views' | 'created_at' | 'updated_at'>; Update: Partial<Listing> }
-      orders: { Row: Order; Insert: Omit<Order, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Order> }
-      conversations: { Row: Conversation; Insert: Omit<Conversation, 'id' | 'created_at' | 'last_message_at'>; Update: Partial<Conversation> }
-      messages: { Row: Message; Insert: Omit<Message, 'id' | 'created_at'>; Update: Partial<Message> }
-      disputes: { Row: Dispute; Insert: Omit<Dispute, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Dispute> }
-      reviews: { Row: Review; Insert: Omit<Review, 'id' | 'created_at'>; Update: Partial<Review> }
-    }
-  }
-}
