@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Category } from '@/lib/types'
@@ -8,21 +8,16 @@ import type { Category } from '@/lib/types'
 export default function NewListingPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [form, setForm] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category_id: '',
-    condition: '',
-    location: '',
-    images: '',
+    title: '', description: '', price: '', category_id: '',
+    condition: '', location: '', images: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('name').then(({ data }) => {
+    supabaseRef.current.from('categories').select('*').order('name').then(({ data }) => {
       if (data) setCategories(data)
     })
   }, [])
@@ -35,49 +30,48 @@ export default function NewListingPage() {
     setError('')
     setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/auth/login'); return }
+    try {
+      const { data: { user } } = await supabaseRef.current.auth.getUser()
+      if (!user) { router.push('/auth/login'); return }
 
-    // Parse images (comma-separated URLs)
-    const images = form.images
-      ? form.images.split(',').map(s => s.trim()).filter(Boolean)
-      : []
+      const images = form.images
+        ? form.images.split(',').map(s => s.trim()).filter(Boolean)
+        : []
 
-    const { data, error } = await supabase.from('listings').insert({
-      seller_id: user.id,
-      title: form.title,
-      description: form.description,
-      price: parseFloat(form.price),
-      category_id: form.category_id ? parseInt(form.category_id) : null,
-      condition: form.condition || null,
-      location: form.location || null,
-      images,
-    }).select().single()
+      const { data, error } = await supabaseRef.current.from('listings').insert({
+        seller_id: user.id,
+        title: form.title,
+        description: form.description,
+        price: parseFloat(form.price),
+        category_id: form.category_id ? parseInt(form.category_id) : null,
+        condition: form.condition || null,
+        location: form.location || null,
+        images,
+      }).select().single()
 
-    if (error) {
-      setError(error.message)
+      if (error) {
+        setError(error.message)
+      } else {
+        router.push(`/listings/${data.id}`)
+      }
+    } finally {
       setLoading(false)
-    } else {
-      router.push(`/listings/${data.id}`)
     }
   }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Create listing</h1>
-
       <div className="card p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="label">Title *</label>
             <input type="text" className="input" value={form.title} onChange={set('title')} required maxLength={100} placeholder="What are you selling?" />
           </div>
-
           <div>
             <label className="label">Description *</label>
             <textarea className="input min-h-[120px] resize-y" value={form.description} onChange={set('description')} required maxLength={2000} placeholder="Describe the item, its condition, any defects..." />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Price (USD) *</label>
@@ -95,15 +89,12 @@ export default function NewListingPage() {
               </select>
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Category</label>
               <select className="input" value={form.category_id} onChange={set('category_id')}>
                 <option value="">Select category</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                ))}
+                {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
               </select>
             </div>
             <div>
@@ -111,16 +102,13 @@ export default function NewListingPage() {
               <input type="text" className="input" value={form.location} onChange={set('location')} placeholder="City, State" />
             </div>
           </div>
-
           <div>
             <label className="label">Image URLs</label>
             <input type="text" className="input" value={form.images} onChange={set('images')} placeholder="https://..., https://... (comma-separated)" />
             <p className="text-xs text-gray-400 mt-1">Enter one or more image URLs separated by commas</p>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => router.back()} className="btn-secondary flex-1">Cancel</button>

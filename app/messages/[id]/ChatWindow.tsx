@@ -17,17 +17,16 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
 
-  // Subscribe to realtime messages
   useEffect(() => {
+    const supabase = supabaseRef.current
     const channel = supabase
       .channel(`conv:${conversationId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         async (payload) => {
-          // Fetch sender info
           const { data: sender } = await supabase
             .from('profiles')
             .select('id, username')
@@ -35,14 +34,14 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
             .single()
 
           const msg: Message = { ...(payload.new as Message), sender: sender ?? undefined }
-          setMessages(prev => [...prev, msg])
+          setMessages(prev => {
+            // Avoid duplicates
+            if (prev.some(m => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
 
-          // Mark as read if from other user
           if ((payload.new as Message).sender_id !== currentUserId) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', (payload.new as Message).id)
+            await supabase.from('messages').update({ is_read: true }).eq('id', (payload.new as Message).id)
           }
         }
       )
@@ -51,7 +50,6 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
     return () => { supabase.removeChannel(channel) }
   }, [conversationId, currentUserId])
 
-  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -59,36 +57,31 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const content = input.trim()
-    if (!content) return
+    if (!content || sending) return
 
     setSending(true)
     setInput('')
 
-    await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      sender_id: currentUserId,
-      content,
-    })
-
-    setSending(false)
+    try {
+      await supabaseRef.current.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: currentUserId,
+        content,
+      })
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
     <div className="flex flex-col flex-1 card overflow-hidden">
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map(msg => {
           const isOwn = msg.sender_id === currentUserId
           return (
             <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                <div
-                  className={`rounded-2xl px-4 py-2 text-sm ${
-                    isOwn
-                      ? 'bg-blue-600 text-white rounded-br-sm'
-                      : 'bg-gray-100 text-gray-900 rounded-bl-sm'
-                  }`}
-                >
+                <div className={`rounded-2xl px-4 py-2 text-sm ${isOwn ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-100 text-gray-900 rounded-bl-sm'}`}>
                   {msg.content}
                 </div>
                 <span className="text-xs text-gray-400">
@@ -101,7 +94,6 @@ export default function ChatWindow({ conversationId, currentUserId, initialMessa
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <form onSubmit={sendMessage} className="border-t border-gray-100 p-3 flex gap-2">
         <input
           type="text"
